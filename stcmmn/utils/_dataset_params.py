@@ -80,4 +80,16 @@ DATASET_PARAMS = {
             "right_hand": 1,
         }
     },
+    'Schirrmeister2017': {
+        'subject_id': None,
+        'fs': 500,
+        'channels': [
+            'FC3', 'FCz', 'FC4', 'C5', 'C3', 'C1', 'Cz',
+            'C2', 'C4', 'C6', 'CP3', 'CPz', 'CP4',
+        ],
+        'mapping': {
+            "left_hand": 0,
+            "right_hand": 1,
+        }
+    },
 }

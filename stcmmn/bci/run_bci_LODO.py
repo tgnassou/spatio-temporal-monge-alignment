@@ -4,7 +4,6 @@ from sklearn.model_selection import train_test_split
 import pandas as pd
 import argparse
 
-from braindecode.models import ShallowFBCSPNet, EEGNetv4
 from braindecode import EEGClassifier
 from torch import nn
 import torch
@@ -16,6 +15,7 @@ from stcmmn.utils import load_BCI_dataset
 from stcmmn.utils import CMMN, RiemanianAlignment
 from stcmmn.utils import AdaptiveShallowFBCSPNet
 from stcmmn.utils import DATASET_PARAMS, compute_final_conv_length
+from stcmmn.utils import DomainDataset, DomainBatchSampler
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -28,7 +28,7 @@ def get_parser():
     # dataset to use, when expe is inter this dataset is the one use in target
     parser.add_argument("--filter", action='store_true')
     parser.add_argument("--concatenate", action='store_true')
-    parser.add_argument("--archi", type=str, default="ShallowNet")
+    parser.add_argument("--archi", type=str, default="AdaptiveShallowNet")
     parser.add_argument("--n-epochs", type=int, default=200)
     parser.add_argument("--filter-size", type=int, default=32)
     parser.add_argument("--reg", type=float, default=1e-2)
@@ -74,7 +74,7 @@ filter_size = args.filter_size
 archi = args.archi
 lr = 0.0625 * 0.01
 weight_decay = 0
-batch_size = 256
+batch_size = 64
 seed = 42
 for dataset_target in dataset_names:
     for method in ["raw", "spatiotemp", "riemann"]:
@@ -87,12 +87,14 @@ for dataset_target in dataset_names:
         torch.manual_seed(seed)
         X_source = []
         y_source = []
-        for dataset in dataset_names:
+        domain_source = []
+        for i, dataset in enumerate(dataset_names):
             if dataset != dataset_target:
                 X, y = dataset_dict[dataset]
                 X_ = []
                 for x in X:
-                    X_ += [x[i][:, :, :fs * 3] for i in range(len(x))]
+                    X_ += x
+                    domain_source += [i] * len(x)
                 y_ = []
                 for y__ in y:
                     y_ += y__
@@ -101,6 +103,9 @@ for dataset_target in dataset_names:
         X_all_target, y_all_target = dataset_dict[dataset_target]
 
         y_train = np.concatenate(np.array(y_source), axis=0)
+        domain_train = []
+        for i in range(len(domain_source)):
+            domain_train += [domain_source[i]]*len(X_source[i])
 
         n_classes = np.unique(y_train).shape[0]
         n_domains = len(X_source)
@@ -116,65 +121,79 @@ for dataset_target in dataset_names:
         elif method == "raw":
             X_norm_ = X_source
         elif method == "riemann":
-            ra = RiemanianAlignment()
-            X_norm_ = ra.fit_transform(X_source)
+            ra = RiemanianAlignment(non_homogeneous=True)
+            X_source_ = []
+            for i in range(len(X_source)):
+                for j in range(len(X_source[i])):
+                    X_source_ += [X_source[i][j]]
+            X_norm_ = ra.fit_transform(X_source_)
         else:
             raise ValueError("Method not implemented")
-        X_train = np.concatenate(X_norm_, axis=0)
 
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_train, y_train, test_size=0.2,
-        )
-        dataset_val = Dataset(X_val, y_val)
-        n_chans, n_times = X_[0][0].shape
-        if archi == "ShallowNet":
-            model = ShallowFBCSPNet(
+        # X_train, X_val, y_train, y_val, domain_train, domain_val = train_test_split(
+        #     X_norm_, y_train, domain_train, test_size=0.2,
+        # )
+        # dataset_val = DomainDataset(X_val, y_val, domain_val)
+        n_chans, _ = X_[0][0].shape
+        n_times = []
+        for i in range(len(X_source)):
+            n_times += [X_source[i][0].shape[1]]
+
+        n_times += [X_all_target[0][0].shape[-1]]
+        if archi == "AdaptiveShallowNet":
+            final_conv_length = compute_final_conv_length(n_times)
+            model = AdaptiveShallowFBCSPNet(
                 n_chans,
                 n_classes,
                 n_times=n_times,
-                final_conv_length='auto',
+                final_conv_length=final_conv_length,
                 add_log_softmax=False,
             )
-        elif archi == "EEGNet":
-            model = EEGNetv4(
-                n_chans,
-                n_classes,
-                n_times=n_times,
-                final_conv_length='auto',
-                add_log_softmax=False,
-            )
-        # elif archi == "AdaptiveShallowNet":
-        #     final_conv_length = compute_final_conv_length(n_times, n_times_target)
-        #     model = AdaptiveShallowFBCSPNet(
-        #         n_chans,
-        #         n_classes,
-        #         n_times=n_times,
-        #         final_conv_length=final_conv_length,
-        #         add_log_softmax=False,
-        #     )
+        else:
+            raise ValueError("Architecture not implemented")
         model = model.to(device)
 
+        X_train = []
+        for i in range(len(X_norm_)):
+            if method == "riemann":
+                X_train += [X_norm_[i]]
+            else:
+                for j in range(len(X_norm_[i])):
+                    X_train += [X_norm_[i][j]]
+        X_tensor = []
+        for i in range(len(X_train)):
+            X_tensor += [torch.tensor(X_train[i])]
+        dataset_train = DomainDataset(
+            X_tensor, torch.tensor(y_train), torch.tensor(domain_train),
+        )
         clf = EEGClassifier(
             module=model,
             max_epochs=n_epochs,
             batch_size=batch_size,
             criterion=nn.CrossEntropyLoss,
             optimizer=torch.optim.Adam,
-            iterator_train__shuffle=True,
+            iterator_train__shuffle=False,
+            # iterator_valid__shuffle=False,
+            iterator_train__sampler=DomainBatchSampler(
+                dataset_train, batch_size=batch_size
+            ),
+            # iterator_valid__samplers=DomainBatchSampler(
+            #     dataset_val, batch_size=batch_size, shuffle=False
+            # ),
             optimizer__lr=lr,
             optimizer__weight_decay=weight_decay,
             device=device,
-            train_split=predefined_split(dataset_val),
+            train_split=None,
             callbacks=[
                 (
                     "lr_scheduler",
                     LRScheduler("CosineAnnealingLR", T_max=n_epochs - 1)
                 ),
-                ("early_stopping", EarlyStopping(patience=20)),
+                # ("early_stopping", EarlyStopping(patience=20)),
             ],
         )
 
-        clf.fit(X_train, y_train)
+        clf.fit(dataset_train)
         # Predict y for X_test
         n_subjects = len(X_all_target)
         for subject_test in range(n_subjects):

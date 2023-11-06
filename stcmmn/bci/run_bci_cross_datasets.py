@@ -15,7 +15,8 @@ from skorch.dataset import Dataset
 from stcmmn.utils import load_BCI_dataset
 from stcmmn.utils import CMMN, RiemanianAlignment
 from stcmmn.utils import AdaptiveShallowFBCSPNet
-from stcmmn.utils import DATASET_PARAMS, compute_final_conv_length
+from stcmmn.utils import DATASET_PARAMS, BEST_PARAMS
+from stcmmn.utils import compute_final_conv_length
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -27,12 +28,18 @@ def get_parser():
     )
     # dataset to use, when expe is inter this dataset is the one use in target
     parser.add_argument("--filter", action='store_true')
+    parser.add_argument("--concatenate", action='store_true')
     parser.add_argument("--method", type=str, default="raw")
     parser.add_argument("--dataset-source", type=str, default="BNCI2014001")
     parser.add_argument("--dataset-target", type=str, default="BNCI2014004")
     parser.add_argument("--archi", type=str, default="AdaptiveShallowNet")
     parser.add_argument("--n-epochs", type=int, default=200)
-    parser.add_argument("--filter-size", type=int, default=128)
+    parser.add_argument("--n-seed", type=int, default=5)
+    parser.add_argument("--best-params", action='store_true')
+    parser.add_argument("--filter-size", type=int, default=64)
+    parser.add_argument("--reg", type=float, default=0.01)
+    parser.add_argument("--savedir", type=str, default="cross_datasets")
+
     return parser
 
 
@@ -58,8 +65,8 @@ channels = np.intersect1d(channels_source, channels_target)
 classes = np.intersect1d(
     list(mapping_source.keys()), list(mapping_target.keys())
 )
-# mapping = {class_: i for i, class_ in enumerate(classes)}
-mapping = {"right_hand": 0, "left_hand": 1}
+mapping = {class_: i for i, class_ in enumerate(classes)}
+# mapping = {"right_hand": 0, "left_hand": 1}
 if args.dataset_source != "PhysionetMI":
     mapping_source = mapping
 if args.dataset_target != "PhysionetMI":
@@ -91,29 +98,44 @@ if args.archi != "AdaptiveShallowNet":
             X_all_target[i][j] = X_all_target[i][j][:, :, :fs * 3]
 
 n_epochs = args.n_epochs
-filter_size = args.filter_size
+if args.best_params:
+    filter_size = BEST_PARAMS[args.dataset_source]["filter_size"]
+else:
+    filter_size = args.filter_size
+if args.best_params:
+    reg = BEST_PARAMS[args.dataset_source]["reg"]
+else:
+    reg = args.reg
+
 method = args.method
 archi = args.archi
 lr = 0.0625 * 0.01
 weight_decay = 0
 batch_size = 256
 results_path = (
-    f"results/cross_datasets/{archi}_{method}"
+    f"results/{args.savedir}/{archi}_{method}"
     f"_{args.dataset_source}_to_{args.dataset_target}"
     f"_filter_{args.filter}.pkl"
 )
 
-for seed in range(5):
+for seed in range(args.n_seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     X_ = np.concatenate(np.array(X_all_source), axis=0)
-    y_train = np.concatenate(np.concatenate(np.array(y_all_source), axis=0), axis=0)
+    y_train = np.concatenate(
+        np.concatenate(np.array(y_all_source), axis=0),
+        axis=0
+    )
 
     n_classes = np.unique(y_train).shape[0]
     n_domains = len(X_)
     if method in ["temp", "spatiotemp"]:
         cmmn = CMMN(
-            method=method, filter_size=filter_size, fs=fs,
+            method=method,
+            filter_size=filter_size,
+            fs=fs,
+            reg=reg,
+            concatenate_epochs=args.concatenate
         )
         X_norm_ = cmmn.fit_transform(X_)
     elif method == "raw":
@@ -208,6 +230,8 @@ for seed in range(5):
             "dataset_source": args.dataset_source,
             "dataset_target": args.dataset_target,
             "n_epochs": n_epochs,
+            "concatenate": args.concatenate,
+            "reg": reg,
         }]
 
         try:

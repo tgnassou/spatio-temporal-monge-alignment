@@ -14,7 +14,9 @@ class CMMN(ABC):
         method="temp",
         weights=None,
         eps=1e-4,
-        num_iter=1
+        reg=1e-4,
+        num_iter=1,
+        concatenate_epochs=True,
     ):
         super().__init__()
         self.filter_size = filter_size
@@ -23,21 +25,22 @@ class CMMN(ABC):
         self.barycenter = None
         self.method = method
         self.eps = eps
+        self.reg = reg
         self.num_iter = num_iter
+        self.concatenate_epochs = concatenate_epochs
 
     def fit(self, X):
         """Fit the barycenter.
 
         Parameters
         ----------
-        X : list, shape=(K, C, T) or (K, N, C, T)
+        X : list, shape=(K, N, C, T)
             List of data signals for each domain. Each domain
             does not have the same time length.
         """
-        if len(X[0].shape) == 3:
-            # Reduce the number of dimension to (C, T)
+        if self.concatenate_epochs:
+            # Reduce the number of dimension to (K, C, N*T)
             X = [np.concatenate(X[i], axis=-1) for i in range(len(X))]
-
         self.compute_barycenter(X)
 
         return self
@@ -51,17 +54,17 @@ class CMMN(ABC):
             List of data signals for each domain. Each domain
             does not have the same time length.
         """
-        reduce = False
-        if len(X[0].shape) == 3:
+        if self.concatenate_epochs:
             window_size = X[0].shape[-1]
-            # Reduce the number of dimension to (C, T)
+            # Reduce the number of dimension to (K, C, N*T)
             X = [np.concatenate(X[i], axis=-1) for i in range(len(X))]
-            reduce = True
-        H = self.compute_filter(X)
-        X = self.compute_convolution(X, H)
-
-        if reduce:
+            H = self.compute_filter(X)
+            X = self.compute_convolution(X, H)
             X = [self._epoching(X[i], window_size) for i in range(len(X))]
+        else:
+            H = self.compute_filter(X)
+            X = [self.compute_convolution(X[i], H[i]) for i in range(len(X))]
+
         return X
 
     def fit_transform(self, X):
@@ -116,7 +119,12 @@ class CMMN(ABC):
 
     def _spatio_temporal_barycenter(self, X):
         K = len(X)
-        B = [self._get_csd(X[i]) for i in range(K)]
+        if self.concatenate_epochs:
+            B = [self._get_csd(X[i]) for i in range(K)]
+        else:
+            B = []
+            for i in range(K):
+                B += [self._get_csd(X[i][j]) for j in range(len(X[i]))]
         diff = np.inf
         Bbar = np.mean(B, axis=0)
         for _ in range(self.num_iter):
@@ -165,7 +173,10 @@ class CMMN(ABC):
         return H
 
     def _compute_spatio_temporal_filter(self, X):
-        B = self._get_csd(X)
+        if self.concatenate_epochs:
+            B = self._get_csd(X)
+        else:
+            B = np.mean([self._get_csd(X[i]) for i in range(len(X))], axis=0)
         B_sqrt = self._matrix_operator(B.T, np.sqrt).T
         B_sqrt_inv = self._matrix_operator(B.T, lambda x: 1 / np.sqrt(x)).T
         D_ = np.einsum("ijl,jkl,kml -> iml", B_sqrt, self.barycenter, B_sqrt)
@@ -188,13 +199,19 @@ class CMMN(ABC):
         """
         if self.method == "temp":
             X_norm = [
-                self._temporal_convolution(X[i], H[i]) for i in range(len(H))
+                self._temporal_convolution(X[i], H[i]) for i in range(len(X))
             ]
         elif self.method == "spatiotemp":
-            X_norm = [
-                self._spatio_temporal_convolution(X[i], H[i])
-                for i in range(len(H))
-            ]
+            if self.concatenate_epochs:
+                X_norm = [
+                    self._spatio_temporal_convolution(X[i], H[i])
+                    for i in range(len(X))
+                ]
+            else:
+                X_norm = [
+                    self._spatio_temporal_convolution(X[i], H)
+                    for i in range(len(X))
+                ]
         return X_norm
 
     def _temporal_convolution(self, X, H):
@@ -243,18 +260,18 @@ class CMMN(ABC):
             end += step
         return np.array(data)
 
-    def _get_csd(self, X):
+    def _get_csd(self, X, ensure_positive=True):
         csd = np.array([
             scipy.signal.csd(X, X[i], nperseg=self.filter_size, fs=self.fs)[1]
             for i in range(len(X))
         ])
         return csd
 
-    def _matrix_operator(self, A, operator, ensure_positive=True, reg=1e-4):
+    def _matrix_operator(self, A, operator, ensure_positive=True):
         eigvals, eigvecs = np.linalg.eigh(A)
         eigvals = np.expand_dims(eigvals, -2)
         if ensure_positive:
-            eigvals = eigvals.clip(reg, None)
+            eigvals = eigvals.clip(0, None) + self.reg
         eigvals = operator(eigvals)
         A_operator = (eigvecs * eigvals) @ np.swapaxes(eigvecs.conj(), -2, -1)
         return A_operator

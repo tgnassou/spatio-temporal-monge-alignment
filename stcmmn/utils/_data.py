@@ -14,8 +14,9 @@ from braindecode.preprocessing import (
 from numpy import multiply
 from braindecode.preprocessing import create_windows_from_events
 
+from pathlib import Path
 
-from cmm.config import DATA_PATH
+DATA_PATH = Path("/storage/store3/derivatives/")
 
 mne.set_log_level("warning")
 
@@ -185,74 +186,54 @@ def load_sleep_dataset(
     emg=False,
     data_path=None,
     scaler="sample",
-    # ses=1,
 ):
+    data_path = DATA_PATH
     if dataset_name == "MASS":
-        if data_path is None:
-            data_path = DATA_PATH
-        data_path = data_path / "MASS" / "SS3" / "4channels-eeg_eog_emg"
+        data_path = data_path / "MASS" / "SS3" / "7channels"
         ses = None
         return load_data(n_subjects, data_path, eog, emg, scaler, ses)
 
     if dataset_name == "ABC":
-        if data_path is None:
-            data_path = DATA_PATH
-        data_path = data_path / "ABC" / "2channels"
+        data_path = data_path / "ABC" / "7channels"
         ses = "1"
         return load_data(n_subjects, data_path, eog, emg, scaler, ses)
 
     if dataset_name == "CHAT":
-        if data_path is None:
-            data_path = DATA_PATH
-        data_path = data_path / "CHAT" / "2channels"
+        data_path = data_path / "CHAT" / "7channels"
         ses = "1"
         return load_data(n_subjects, data_path, eog, emg, scaler, ses)
 
     if dataset_name == "CFS":
-        if data_path is None:
-            data_path = DATA_PATH
         data_path = data_path / "CFS" / "2channels"
         ses = "1"
         return load_data(n_subjects, data_path, eog, emg, scaler, ses)
 
     if dataset_name == "HOMEPAP":
-        if data_path is None:
-            data_path = DATA_PATH
-        data_path = data_path / "HOMEPAP" / "2channels"
+        data_path = data_path / "HOMEPAP" / "7channels"
         ses = "1"
         return load_data(n_subjects, data_path, eog, emg, scaler, ses)
 
     if dataset_name == "CCSHS":
-        if data_path is None:
-            data_path = DATA_PATH
         data_path = data_path / "CCSHS" / "2channels"
         ses = "1"
         return load_data(n_subjects, data_path, eog, emg, scaler, ses)
 
     if dataset_name == "SOF":
-        if data_path is None:
-            data_path = DATA_PATH
         data_path = data_path / "SOF" / "2channels"
         ses = "1"
         return load_data(n_subjects, data_path, eog, emg, scaler, ses)
 
     if dataset_name == "MROS":
-        if data_path is None:
-            data_path = DATA_PATH
         data_path = data_path / "MROS" / "2channels"
         ses = "1"
         return load_data(n_subjects, data_path, eog, emg, scaler, ses)
 
     if dataset_name == "Physionet":
-        if data_path is None:
-            data_path = DATA_PATH
         data_path = data_path / "Physionet" / "4channels-eeg_eog_emg"
         ses = "phys"
         return load_data(n_subjects, data_path, eog, emg, scaler, ses)
 
     if dataset_name == "SHHS":
-        if data_path is None:
-            data_path = DATA_PATH
         data_path = data_path / "SHHS" / "4channels-eeg_eog_emg"
         ses = "1"
         return load_data(n_subjects, data_path, eog, emg, scaler, ses)
