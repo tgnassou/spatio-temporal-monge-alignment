@@ -3,6 +3,7 @@ import numpy as np
 import scipy.signal
 import scipy.fft as sp_fft
 from abc import ABC
+from joblib import Parallel, delayed
 
 
 class CMMN(ABC):
@@ -17,6 +18,7 @@ class CMMN(ABC):
         reg=1e-4,
         num_iter=1,
         concatenate_epochs=True,
+        n_jobs=1,
     ):
         super().__init__()
         self.filter_size = filter_size
@@ -28,6 +30,7 @@ class CMMN(ABC):
         self.reg = reg
         self.num_iter = num_iter
         self.concatenate_epochs = concatenate_epochs
+        self.n_jobs = n_jobs
 
     def fit(self, X):
         """Fit the barycenter.
@@ -120,7 +123,9 @@ class CMMN(ABC):
     def _spatio_temporal_barycenter(self, X):
         K = len(X)
         if self.concatenate_epochs:
-            B = [self._get_csd(X[i]) for i in range(K)]
+            B = Parallel(n_jobs=self.n_jobs)(
+                delayed(self._get_csd)(X[i]) for i in range(K)
+            )
         else:
             B = []
             for i in range(K):
@@ -152,10 +157,10 @@ class CMMN(ABC):
         if self.method == "temp":
             H = self._compute_temporal_filter(X)
         elif self.method == "spatiotemp":
-            H = [
-                self._compute_spatio_temporal_filter(X[i])
+            H = Parallel(n_jobs=self.n_jobs)(
+                delayed(self._compute_spatio_temporal_filter)(X[i])
                 for i in range(len(X))
-            ]
+            )
         return np.fft.fftshift(H, axes=-1)
 
     def _compute_temporal_filter(self, X):
@@ -203,10 +208,10 @@ class CMMN(ABC):
             ]
         elif self.method == "spatiotemp":
             if self.concatenate_epochs:
-                X_norm = [
-                    self._spatio_temporal_convolution(X[i], H[i])
+                X_norm = Parallel(n_jobs=self.n_jobs)(
+                    delayed(self._spatio_temporal_convolution)(X[i], H[i])
                     for i in range(len(X))
-                ]
+                )
             else:
                 X_norm = [
                     self._spatio_temporal_convolution(X[i], H)
