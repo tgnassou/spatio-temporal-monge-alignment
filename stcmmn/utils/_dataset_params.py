@@ -84,8 +84,48 @@ DATASET_PARAMS = {
         'subject_id': None,
         'fs': 500,
         'channels': [
-            'FC3', 'FCz', 'FC4', 'C5', 'C3', 'C1', 'Cz',
-            'C2', 'C4', 'C6', 'CP3', 'CPz', 'CP4',
+            'Fz', 'FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'C5', 'C3',
+            'C1', 'Cz', 'C2', 'C4', 'C6', 'CP3', 'CP1', 'CPz', 'CP2',
+            'CP4', 'P1', 'Pz', 'P2', 'POz',
+        ],
+        'mapping': {
+            "left_hand": 0,
+            "right_hand": 1,
+        }
+    },
+    'GrosseWentrup2009': {
+        'subject_id': None,
+        'fs': 500,
+        'channels': [
+            'Fz', 'FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'C5', 'C3',
+            'C1', 'Cz', 'C2', 'C4', 'C6', 'CP3', 'CP1', 'CPz', 'CP2',
+            'CP4', 'P1', 'Pz', 'P2', 'POz',
+        ],
+        'mapping': {
+            "left_hand": 0,
+            "right_hand": 1,
+        }
+    },
+    'Shin2017A': {
+        'subject_id': None,
+        'fs': 200,
+        'channels': [
+            'Fz', 'FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'C5', 'C3',
+            'C1', 'Cz', 'C2', 'C4', 'C6', 'CP3', 'CP1', 'CPz', 'CP2',
+            'CP4', 'P1', 'Pz', 'P2', 'POz',
+        ],
+        'mapping': {
+            "left_hand": 0,
+            "right_hand": 1,
+        }
+    },
+    'Shin2017B': {
+        'subject_id': None,
+        'fs': 200,
+        'channels': [
+            'Fz', 'FC3', 'FC1', 'FCz', 'FC2', 'FC4', 'C5', 'C3',
+            'C1', 'Cz', 'C2', 'C4', 'C6', 'CP3', 'CP1', 'CPz', 'CP2',
+            'CP4', 'P1', 'Pz', 'P2', 'POz',
         ],
         'mapping': {
             "left_hand": 0,

@@ -252,10 +252,14 @@ def load_BCI_dataset(
     channels_to_pick=None,
     mapping=None,
 ):
-    dataset = MOABBDataset(
-        dataset_name=dataset_name, subject_ids=subject_id
-    )
-
+    if dataset_name in ["Shin2017A", "Shin2017B"]:
+        dataset = MOABBDataset(
+            dataset_name=dataset_name, subject_ids=subject_id, accept=True
+        )
+    else:
+        dataset = MOABBDataset(
+            dataset_name=dataset_name, subject_ids=subject_id
+        )
     low_cut_hz = 4.0  # low cut frequency for filtering
     high_cut_hz = 40.0  # high cut frequency for filtering
     # Parameters for exponential moving standardization

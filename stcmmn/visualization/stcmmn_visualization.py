@@ -9,7 +9,7 @@ import seaborn as sns
 
 palette = sns.color_palette("colorblind", 10)
 # %%
-dataset = "BNCI2014004"
+dataset = "Cho2017"
 
 fs = DATASET_PARAMS[dataset]["fs"]
 subject_id = DATASET_PARAMS[dataset]["subject_id"]
@@ -18,7 +18,7 @@ mapping = DATASET_PARAMS[dataset]["mapping"]
 
 # %%
 X_all, y_all = load_BCI_dataset(
-    dataset, subject_id=subject_id, n_jobs=1,
+    dataset, subject_id=[1, 2, 3], n_jobs=1,
     filter=True, channels_to_pick=channels, mapping=mapping,
     resample=100
 )
