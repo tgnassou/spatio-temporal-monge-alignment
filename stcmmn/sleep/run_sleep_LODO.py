@@ -47,16 +47,16 @@ module_name = "chambon"
 max_epochs = 150
 batch_size = 128
 patience = 15
-filter_size = 1024
+filter_size = 2048
 n_jobs = 30
 # %%
-for method in ["temp"]:
+for method in ["raw", "temp", "spatio", "riemann", "spatiotemp"]:
 
     results_path = (
-        f"results/LODO/results_LODO_{method}_{module_name}_"
+        f"results/LODO_final/results_LODO_{method}_{module_name}_"
         f"{len(dataset_names)}_dataset_with_{n_subject}_subjects.pkl"
     )
-    for seed in range(1):
+    for seed in range(10):
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
         rng = check_random_state(seed)
@@ -108,6 +108,7 @@ for method in ["temp"]:
                     reg=1e-7,
                     concatenate_epochs=True,
                     n_jobs=n_jobs,
+                    num_iter=10
                 )
                 X_train = cmmn.fit_transform(X_train)
                 X_val = cmmn.transform(X_val)
@@ -147,13 +148,16 @@ for method in ["temp"]:
                     (
                         "early_stopping",
                         EarlyStopping(
-                            monitor="valid_loss", patience=patience, load_best=True
+                            monitor="valid_loss",
+                            patience=patience,
+                            load_best=True
                         ),
                     )
                 ],
             )
             clf.fit(
-                np.concatenate(X_train, axis=0), np.concatenate(y_train, axis=0)
+                np.concatenate(X_train, axis=0),
+                np.concatenate(y_train, axis=0)
             )
             n_target = len(X_target)
 

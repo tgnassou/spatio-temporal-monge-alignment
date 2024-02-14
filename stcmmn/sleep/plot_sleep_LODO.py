@@ -4,37 +4,58 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+from statannotations.Annotator import Annotator
+from scipy.stats import mannwhitneyu, wilcoxon
+from matplotlib.pyplot import text
 
 from sklearn.metrics import balanced_accuracy_score
 # %%
-fnames = list(Path("results/LODO/").glob("*.pkl"))
+fnames = list(Path("results/LODO_final/").glob("*.pkl"))
 df = pd.concat([pd.read_pickle(fname) for fname in fnames], axis=0)
 df["bal"] = df.apply(
     lambda x: balanced_accuracy_score(x.y_target, x.y_pred),
     axis=1
 )
-df = df.query("method != 'spatiotemp'")
+# df = df.query("method != 'spatiotemp'")
 # %%
-fnames = list(Path("results/valid_params/").glob("*.pkl"))
-df_spatio = pd.concat([pd.read_pickle(fname) for fname in fnames], axis=0)
-df_spatio["bal"] = df_spatio.apply(
-    lambda x: balanced_accuracy_score(x.y_target, x.y_pred),
-    axis=1
-)
-df_spatio = df_spatio.query("filter_size == 2048 & reg == 1e-7")
-df_spatio["bal_adapted"] = df_spatio["bal"]
+# fnames = list(Path("results/num_iter/").glob("*.pkl"))
+# df_spatio = pd.concat([pd.read_pickle(fname) for fname in fnames], axis=0)
+# df_spatio["bal"] = df_spatio.apply(
+#     lambda x: balanced_accuracy_score(x.y_target, x.y_pred),
+#     axis=1
+# )
+# # df_spatio = df_spatio.query("filter_size == 2048 & reg == 1e-7")
+# df_spatio = df_spatio.query("num_iter == 10")
+# df_spatio["bal_adapted"] = df_spatio["bal"]
 
 # %% Plot Spatio-temp vs RA and raw
+pairs = [
+    ("raw", "spatiotemp"),
+    ("raw", "riemann"),
+    ("spatiotemp", "riemann"),
+]
+# formatted_pvalues = [f"p={p:.2e}" for p in pvalues]
 
-df_plot = pd.concat((df.query("method != 'temp'"), df_spatio), axis=0)
-
+# df_plot = pd.concat((df.query("method in ['raw', 'riemann', 'spatiotemp']"), df_spatio), axis=0)
+df_plot = df.query("method in ['raw', 'riemann', 'spatiotemp']")
 fig, axes = plt.subplots(2, 2, figsize=(8, 5), sharex=True,)  # sharey=True)
 dataset = ["ABC", "CHAT", "HOMEPAP", "MASS"]
 df_plot = df_plot.groupby(
     ["subject", "dataset_t", "method"]
 ).mean().reset_index()
+
 for i, ax in enumerate(axes.flatten()):
     df_plot_ = df_plot.query(f"dataset_t == '{dataset[i]}'")
+
+    raw = df_plot_.loc[(df_plot_.method == "raw"), "bal"].values
+    riemann = df_plot_.loc[(df_plot_.method == "riemann"), "bal"].values
+    spatiotemp = df_plot_.loc[(df_plot_.method == "spatiotemp"), "bal"].values
+
+    pvalues = [
+        wilcoxon(raw, spatiotemp, alternative="two-sided").pvalue,
+        wilcoxon(raw, riemann, alternative="two-sided").pvalue,
+        wilcoxon(spatiotemp, riemann, alternative="two-sided").pvalue
+    ]
 
     axis = sns.boxplot(
         data=df_plot_,
@@ -47,6 +68,20 @@ for i, ax in enumerate(axes.flatten()):
         showfliers=False,
         ax=ax,
     )
+    annotator = Annotator(
+        ax,
+        pairs,
+        data=df_plot_,
+        fliersize=3,
+        width=0.9,
+        x="bal",
+        y="method",
+        orient="h",
+        palette="colorblind",
+        showfliers=False,
+    )
+    annotator.set_pvalues(pvalues)
+    annotator.annotate()
     for patch in axis.patches:
         r, g, b, a = patch.get_facecolor()
         patch.set_facecolor((r, g, b, .6))
@@ -56,7 +91,7 @@ for i, ax in enumerate(axes.flatten()):
         y="method",
         orient="h",
         dodge=False,
-        legend=False,
+        # legend=False,
         ax=ax,
         alpha=0.3,
         size=5,
@@ -67,13 +102,13 @@ for i, ax in enumerate(axes.flatten()):
     acc = df_plot_.groupby("method").mean().reset_index().bal
     std = df_plot_.groupby("method").std().reset_index().bal
     labels = [
-        f"w/o Normalization \n ({acc[0]:.2f} $\pm$ {std[0]:.2f}) ", # noqa
-        f"Riemann Alignment \n ({acc[1]:.2f} $\pm$ {std[1]:.2f})", # noqa
-        f"Spatio-Temp CMMN  \n ({acc[2]:.2f} $\pm$ {std[2]:.2f})", # noqa
+        f"No Align. \n ({acc[0]:.2f} $\pm$ {std[0]:.2f}) ", # noqa
+        f"RA \n ({acc[1]:.2f} $\pm$ {std[1]:.2f})", # noqa
+        f"STMA  \n ({acc[2]:.2f} $\pm$ {std[2]:.2f})", # noqa
         # f"Temp CMMN  \n ({acc[3]:.2f} $\pm$ {std[3]:.2f})"
     ]
     ax.set_yticklabels(labels)
-    ax.set_title(f"Target: {dataset[i]}")
+    ax.set_title(f"Target: {dataset[i]}  ({int(len(df_plot_)/3)} subj.)")
     if i >= 2:
         ax.set_xlabel("BACC")
     else:
@@ -91,7 +126,7 @@ df_plot = pd.concat(
 df_plot = df_plot[["subject", "dataset_t", "bal_adapted", "bal"]]
 df_plot["delta"] = df_plot.bal_adapted - df_plot.bal
 fig, axes = plt.subplots(
-    2, 2, figsize=(5, 5), sharex=True, sharey=True, layout="constrained"
+    1, 4, figsize=(10, 3), sharex=True, sharey=True, layout="constrained"
 )
 dataset = ["ABC", "CHAT", "HOMEPAP", "MASS"]
 
@@ -104,16 +139,6 @@ vmin = df_plot['delta'].min()
 for i, ax in enumerate(axes.flatten()):
     df_plot_ = df_plot.query(f"dataset_t == '{dataset[i]}'")
 
-    # sns.regplot(
-    #     data=df_plot_,
-    #     x="bal",
-    #     y="bal_adapted",
-    #     line_kws={"alpha": 0.5},
-    #     scatter_kws={"alpha": 0.5, "s": 20},
-    #     ax=ax,
-    #     color=sns.color_palette("deep")[0],
-    #     truncate=False,
-    # )
     sns.scatterplot(
         data=df_plot_,
         x="bal",
@@ -128,6 +153,9 @@ for i, ax in enumerate(axes.flatten()):
         vmin=vmin,
         vmax=vmax,
     )
+    n = np.sum(df_plot_["delta"] > 0)
+    text(0.11, 0.23, f"{np.int(np.round(n/len(df_plot_)*100))}%", horizontalalignment='center', verticalalignment='center', transform=ax.transAxes, size=9)
+    text(0.23, 0.07, f"{np.int(np.round((1 - n/len(df_plot_))*100))}%", horizontalalignment='center', verticalalignment='center', transform=ax.transAxes, size=9)
 
     lims = [
         np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
@@ -138,14 +166,11 @@ for i, ax in enumerate(axes.flatten()):
     ax.plot(lims, lims, "k-", alpha=0.75, zorder=0)
     ax.set_aspect("equal")
     ax.set_xlim(lims)
-    ax.set_title(f"Target: {dataset[i]}")
+    ax.set_title(f"Target: {dataset[i]} \n({len(df_plot_)} subj.)")
 
-    if i >= 2:
-        ax.set_xlabel("No adapt")
-    else:
-        ax.set_xlabel("")
-    if i % 2 == 0:
-        ax.set_ylabel("With CMMN")
+    ax.set_xlabel("BACC with No Align.")
+    if i  == 0:
+        ax.set_ylabel("BACC with STMA")
     else:
         ax.set_ylabel("")
     ax.set_ylim(lims)
@@ -153,7 +178,7 @@ for i, ax in enumerate(axes.flatten()):
 norm = plt.Normalize(vmin, vmax)
 sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
 sm.set_array([])
-cbar_ax = fig.add_axes([.91, .3, .03, .4])
+cbar_ax = fig.add_axes([.89, .3, .01, .45])
 fig.colorbar(sm, cax=cbar_ax, label="$\Delta$BACC")  # noqa
 # plt.suptitle("BACC for LODO with 4 datasets")
 # plt.tight_layout()
@@ -194,7 +219,10 @@ print(df_tab.to_latex(escape=False))
 
 # %%
 # print ablation study
-
+pairs = [
+    ("spatiotemp", "temp"),
+    ("spatiotemp", "spatio"),
+]
 
 df_plot = pd.concat((df.query("method in ['temp', 'raw', 'spatio']"), df_spatio), axis=0)
 
@@ -203,9 +231,24 @@ dataset = ["ABC", "CHAT", "HOMEPAP", "MASS"]
 df_plot = df_plot.groupby(
     ["subject", "dataset_t", "method"]
 ).mean().reset_index()
+palette_base = sns.color_palette("colorblind")
+palette = sns.color_palette(
+    [palette_base[0], palette_base[1], palette_base[3], palette_base[2]]
+)
+
 for i, ax in enumerate(axes.flatten()):
     df_plot_ = df_plot.query(f"dataset_t == '{dataset[i]}'")
 
+    temp = df_plot_.loc[(df_plot_.method == "temp"), "bal"].values
+    spatiotemp = df_plot_.loc[(df_plot_.method == "spatiotemp"), "bal"].values
+    spatio = df_plot_.loc[(df_plot_.method == "spatio"), "bal"].values
+
+    pvalues = [
+        wilcoxon(spatiotemp, temp, alternative="two-sided").pvalue,
+        wilcoxon(spatiotemp, spatio, alternative="two-sided").pvalue,
+    ]
+
+    order = ["raw", "temp", "spatio", "spatiotemp"]
     axis = sns.boxplot(
         data=df_plot_,
         fliersize=3,
@@ -213,10 +256,26 @@ for i, ax in enumerate(axes.flatten()):
         x="bal",
         y="method",
         orient="h",
-        palette="colorblind",
+        palette=palette,
         showfliers=False,
         ax=ax,
+        order=order,
     )
+    annotator = Annotator(
+        ax,
+        pairs,
+        data=df_plot_,
+        fliersize=3,
+        width=0.9,
+        x="bal",
+        y="method",
+        orient="h",
+        palette=palette,
+        showfliers=False,
+        order=order,
+    )
+    annotator.set_pvalues(pvalues)
+    annotator.annotate()
     for patch in axis.patches:
         r, g, b, a = patch.get_facecolor()
         patch.set_facecolor((r, g, b, .6))
@@ -226,24 +285,25 @@ for i, ax in enumerate(axes.flatten()):
         y="method",
         orient="h",
         dodge=False,
-        legend=False,
+        # legend=False,
         ax=ax,
         alpha=0.3,
         size=5,
         color="silver",
         edgecolor="dimgray",
         linewidth=0.1,
+        order=order,
     )
     acc = df_plot_.groupby("method").mean().reset_index().bal
     std = df_plot_.groupby("method").std().reset_index().bal
     labels = [
-        f"w/o Normalization \n ({acc[0]:.2f} $\pm$ {std[0]:.2f}) ", # noqa
-        f"Spatio CMMN\n ({acc[1]:.2f} $\pm$ {std[1]:.2f})", # noqa
-        f"Spatio-Temp CMMN  \n ({acc[2]:.2f} $\pm$ {std[2]:.2f})", # noqa
-        f"Temp CMMN  \n ({acc[3]:.2f} $\pm$ {std[3]:.2f})"
+        f"No Align. \n ({acc[0]:.2f} $\pm$ {std[0]:.2f}) ", # noqa
+        f"TMA  \n ({acc[3]:.2f} $\pm$ {std[3]:.2f})",
+        f"SMA\n ({acc[1]:.2f} $\pm$ {std[1]:.2f})", # noqa
+        f"STMA \n ({acc[2]:.2f} $\pm$ {std[2]:.2f})", # noqa
     ]
     ax.set_yticklabels(labels)
-    ax.set_title(f"Target: {dataset[i]}")
+    ax.set_title(f"Target: {dataset[i]} ({int(len(df_plot_)/4)} subj.)")
     if i >= 2:
         ax.set_xlabel("BACC")
     else:
