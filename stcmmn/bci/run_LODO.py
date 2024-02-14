@@ -27,12 +27,12 @@ def get_parser():
     parser.add_argument("--archi", type=str, default="ShallowNet")
     parser.add_argument("--dataset", type=str, default="BNCI2014001")
     parser.add_argument("--n-epochs", type=int, default=200)
-    parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--savedir", type=str, default="LODO")
     parser.add_argument("--method", type=str, default="raw")
-    parser.add_argument("--reg", type=float, default=0)
+    parser.add_argument("--reg", type=float, default=1e-7)
     parser.add_argument("--filter-size", type=int, default=16)
-    parser.add_argument("--num-iter", type=int, default=1)
+    parser.add_argument("--num-iter", type=int, default=10)
 
     return parser
 
@@ -41,10 +41,16 @@ def get_parser():
 parser = get_parser()
 args = parser.parse_args()
 
-n_jobs = 10
+n_jobs = 5
 
 # Load the three datasets
-dataset_names = ["BNCI2014001", "Weibo2014", "PhysionetMI"]
+dataset_names = [
+    "BNCI2014001",
+    "Weibo2014",
+    "PhysionetMI",
+    "Cho2017",
+    "Schirrmeister2017",
+]
 channels = DATASET_PARAMS["BNCI2014001"]["channels"]
 fs = 128
 mapping = {"right_hand": 0, "left_hand": 1}
@@ -71,7 +77,7 @@ for dataset in dataset_names:
 # Define source and target domains
 dataset_target = args.dataset
 
-for method in ["raw", "spatio", "temp", "riemannalignment", "spatiotemp"]:
+for method in ["spatiotemp"]:
     for dataset_target in dataset_names:
         # Define source and target domains
         X_source = []
@@ -84,7 +90,9 @@ for method in ["raw", "spatio", "temp", "riemannalignment", "spatiotemp"]:
                     time_length = x[0].shape[2]
                     length_to_remove = (time_length - (fs * 3)) // 2
                     X_ += [
-                        x[i][:, :, length_to_remove:length_to_remove + (fs * 3)]
+                        x[i][
+                            :, :, length_to_remove:length_to_remove + (fs * 3)
+                        ]
                         for i in range(len(x))
                     ]
                 y_ = []
