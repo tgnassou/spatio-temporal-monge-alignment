@@ -115,7 +115,7 @@ class CMMN(ABC):
         if self.concatenate_epochs:
             # Reshape the data to (K, N, C, T)
             X = [self._epoching(X[i], window_size) for i in range(K)]
-        
+
         if return_H:
             return X, H
         return X
@@ -163,7 +163,7 @@ class CMMN(ABC):
         if self.weights is None:
             weights = np.ones(sum_B_sqrt.shape, dtype=psd[0].dtype) / K
 
-        B = np.sum(weights * np.sqrt(sum_B_sqrt), axis=0) ** 2
+        B = np.sum(weights * sum_B_sqrt, axis=0)
         return B
 
     def _spatio_temporal_barycenter(self, psd):
@@ -274,7 +274,6 @@ class CMMN(ABC):
                     H @ X[i]
                     for i in range(N)
                 ]
-
         return X_norm
 
     def _temporal_convolution(self, X, H):
@@ -392,13 +391,19 @@ class CMMN(ABC):
             csd(X, X[i], nperseg=self.filter_size)[1]
             for i in range(len(X))
         ])
+        # regularize the cross spectral density
+        psd = ledoit_wolf_shrinkage(psd, reg=self.reg)
         return psd
 
-    def _matrix_operator(self, A, operator, ensure_positive=True):
+    def _matrix_operator(self, A, operator):
         eigvals, eigvecs = np.linalg.eigh(A)
         eigvals = np.expand_dims(eigvals, -2)
-        if ensure_positive:
-            eigvals = eigvals.clip(0, None) + self.reg
         eigvals = operator(eigvals)
         A_operator = (eigvecs * eigvals) @ np.swapaxes(eigvecs.conj(), -2, -1)
         return A_operator
+
+
+def ledoit_wolf_shrinkage(psd, reg=0.1):
+    _, C, F = psd.shape
+    mu = np.sum(np.trace(psd, axis1=0, axis2=1)) / (C*F)
+    return (reg * mu * np.eye(C) + (1 - reg) * psd.T).T

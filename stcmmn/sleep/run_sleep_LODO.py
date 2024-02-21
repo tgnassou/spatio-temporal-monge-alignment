@@ -105,7 +105,7 @@ for method in ["raw", "temp", "spatio", "riemann", "spatiotemp"]:
                 cmmn = CMMN(
                     method=method,
                     filter_size=filter_size,
-                    reg=1e-7,
+                    reg=1e-3,
                     concatenate_epochs=True,
                     n_jobs=n_jobs,
                     num_iter=10

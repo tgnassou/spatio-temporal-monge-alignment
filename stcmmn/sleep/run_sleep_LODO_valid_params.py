@@ -47,11 +47,11 @@ module_name = "chambon"
 max_epochs = 150
 batch_size = 128
 patience = 15
-n_jobs = 30
+n_jobs = 20
 # %%
 method = "spatiotemp"
-for reg in [1e-7, 1e-5, 1e-4, 1e-3, 1e-2]:
-    for filter_size in [1024, 2048]:
+for reg in [1e-1, 1e-2]:
+    for filter_size in [256, 512, 1024, 2048]:
         results_path = (
             f"results/valid_params/results_LODO_{method}_{module_name}_"
             f"{len(dataset_names)}_dataset_with_{n_subject}_subjects.pkl"
@@ -105,16 +105,16 @@ for reg in [1e-7, 1e-5, 1e-4, 1e-3, 1e-2]:
                 cmmn = CMMN(
                     method=method,
                     filter_size=filter_size,
-                    fs=100,
                     reg=reg,
                     concatenate_epochs=True,
                     n_jobs=n_jobs,
+                    num_iter=10,
                 )
                 X_train = cmmn.fit_transform(X_train)
                 X_val = cmmn.transform(X_val)
                 X_target = cmmn.transform(X_target)
             elif method == "riemann":
-                ra = RiemanianAlignment(non_homogeneous=False)
+                ra = RiemanianAlignment()
                 X_train = cmmn.fit_transform(X_train)
                 X_val = cmmn.transform(X_val)
                 X_target = cmmn.transform(X_target)
