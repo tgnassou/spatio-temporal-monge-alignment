@@ -6,6 +6,7 @@ from ._dataset_params import DATASET_PARAMS
 from ._best_params import BEST_PARAMS
 from ._functions import compute_final_conv_length
 from ._dataloader import DomainDataset, DomainBatchSampler
+from ._mtm import CNNmtm, load_a_dataset
 
 __all__ = [
     "CMMN",
@@ -18,4 +19,6 @@ __all__ = [
     "BEST_PARAMS",
     "DomainDataset",
     "DomainBatchSampler",
+    "CNNmtm",
+    "load_a_dataset",
 ]
