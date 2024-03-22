@@ -110,27 +110,54 @@ def welch_method(image, window_size, overlap_ratio):
 
     return average_psd
 # %%
-n_rows = 4
-n_cols = 4
-domain_to_plot = [0, 4, 7]
-fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 10))
-for i in range(n_rows):
-    for j in range(n_cols):
-        if i == 0:
-            if j == 0:
-                ax = axes[i, j]
-                ax.axis("off")
-            else:
-                ax = axes[i, j]
-                ax.imshow(train_data_numpy[j][0], cmap="viridis")
-                ax.axis("off")
-        else:
-            if j == 0:
-                ax = axes[i, j]
-                ax.imshow(filters[domain_to_plot[i-1]], cmap="viridis")
-            else:
-                ax = axes[i, j]
-                ax.imshow(X[domain_to_plot[i-1]][j], cmap="viridis")
-                ax.axis("off")
-        
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.conv1 = nn.Conv2d(1, 32, 3, 1)
+        self.conv2 = nn.Conv2d(32, 64, 3, 1)
+        self.dropout1 = nn.Dropout(0.25)
+        self.dropout2 = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(9216, 128)
+        self.fc2 = nn.Linear(128, 10)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = F.relu(x)
+        x = self.conv2(x)
+        x = F.relu(x)
+        x = F.max_pool2d(x, 2)
+        x = self.dropout1(x)
+        x = torch.flatten(x, 1)
+        x = self.fc1(x)
+        x = F.relu(x)
+        x = self.dropout2(x)
+        output = self.fc2(x)
+        # output = F.log_softmax(x, dim=1)
+        return output
 # %%
+from skorch import NeuralNetClassifier
+
+model = NeuralNetClassifier(
+    Net,
+    max_epochs=10,
+    lr=0.1,
+    batch_size=1000,
+    device="cuda",
+    optimizer=torch.optim.Adadelta,
+    criterion=nn.CrossEntropyLoss,
+)
+
+
+# %%
+X_train = np.concatenate(X[:9]).astype(np.float32).reshape(-1, 1, 28, 28)
+y_train = np.repeat(train_labels_numpy, 9)
+# %%
+model.fit(train_data_numpy, train_labels_numpy)
+# %%
+print(model.score(np.concatenate(X[10:]), np.repeat(train_labels_numpy, 5)))
+
