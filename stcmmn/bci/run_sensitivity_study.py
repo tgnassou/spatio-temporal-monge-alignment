@@ -27,8 +27,11 @@ def get_parser():
     parser.add_argument("--archi", type=str, default="ShallowNet")
     parser.add_argument("--dataset", type=str, default="BNCI2014001")
     parser.add_argument("--n-epochs", type=int, default=200)
-    parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--savedir", type=str, default="sensitivity_study")
+    parser.add_argument("--method", type=str, default="raw")
+    parser.add_argument("--reg", type=float, default=1e-3)
+    parser.add_argument("--num-iter", type=int, default=10)
 
     return parser
 
@@ -37,10 +40,16 @@ def get_parser():
 parser = get_parser()
 args = parser.parse_args()
 
-n_jobs = 10
+n_jobs = 5
 
 # Load the three datasets
-dataset_names = ["BNCI2014001", "Weibo2014", "PhysionetMI"]
+dataset_names = [
+    "BNCI2014001",
+    "Weibo2014",
+    "PhysionetMI",
+    "Cho2017",
+    "Schirrmeister2017",
+]
 channels = DATASET_PARAMS["BNCI2014001"]["channels"]
 fs = 128
 mapping = {"right_hand": 0, "left_hand": 1}
@@ -59,64 +68,67 @@ for dataset in dataset_names:
     )
 
     if dataset == "PhysionetMI":
-        X = [X[i][:3] for i in range(len(X))]
-        y = [y[i][:3] for i in range(len(y))]
+        # get only right and left hand
+        hands_index = (y[1] == 0) | (y[1] == 1)
+        X = [X[i][hands_index] for i in range(len(X))]
+        y = [y[i][hands_index] for i in range(len(y))]
 
     dataset_dict[dataset] = (X, y)
 
 # Define source and target domains
 dataset_target = args.dataset
-X_source = []
-y_source = []
-for dataset in dataset_names:
-    if dataset != dataset_target:
-        X, y = dataset_dict[dataset]
-        X_ = []
-        for x in X:
-            time_length = x[0].shape[2]
-            length_to_remove = (time_length - (fs * 3)) // 2
-            X_ += [
-                x[i][:, :, length_to_remove:length_to_remove + (fs * 3)]
-                for i in range(len(x))
-            ]
-        y_ = []
-        for y__ in y:
-            y_ += y__
-        X_source += X_
-        y_source += y_
-X_all_target, y_all_target = dataset_dict[dataset_target]
-
-y_train = np.concatenate(np.array(y_source), axis=0)
-
-n_classes = np.unique(y_train).shape[0]
-n_chans, n_times = X_source[0][0].shape
-n_domains = len(X_source)
-
-# Define parameters
-n_epochs = args.n_epochs
-archi = args.archi
-lr = 0.0625 * 0.01
-weight_decay = 0
-batch_size = args.batch_size
-seed = 42
 method = "spatiotemp"
-np.random.seed(seed)
-torch.manual_seed(seed)
-results_path = (
-    f"results/{args.savedir}/{archi}_{method}"
-    f"_to_{dataset_target}"
-    f"_filter_{args.filter}.pkl"
-)
+for filter_size in [4, 2]:
+    for dataset_target in dataset_names:
+        # Define source and target domains
+        X_source = []
+        y_source = []
+        for dataset in dataset_names:
+            if dataset != dataset_target:
+                X, y = dataset_dict[dataset]
+                time_length = X[0].shape[2]
+                length_to_remove = (time_length - (fs * 3)) // 2
+                X_ = [
+                    X[n_sub][
+                        :, :, length_to_remove:length_to_remove + (fs * 3)
+                    ]
+                    for n_sub in range(len(X))
+                ]
+                X_source += X_
+                y_source += y
+        X_all_target, y_all_target = dataset_dict[dataset_target]
 
-for filter_size in [2, 4, 8, 16, 32, 64, 128]:
-    for reg in [0, 0.001, 0.01,]:
+        y_train = np.concatenate(y_source)
+
+        n_classes = np.unique(y_train).shape[0]
+        n_chans, n_times = X_source[0][0].shape
+        n_domains = len(X_source)
+
+        # Define parameters
+        n_epochs = args.n_epochs
+        archi = args.archi
+        reg = args.reg
+        lr = 0.0625 * 0.01
+        weight_decay = 0
+        batch_size = args.batch_size
+        seed = 42
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        results_path = (
+            f"results/{args.savedir}/{archi}_{method}"
+            f"_to_{dataset_target}"
+            f"_filter_{args.filter}.pkl"
+        )
+
         cmmn = CMMN(
             method=method,
             filter_size=filter_size,
             reg=reg,
-            concatenate_epochs=args.concatenate
+            concatenate_epochs=args.concatenate,
+            num_iter=args.num_iter,
         )
         X_adapted = cmmn.fit_transform(X_source)
+
         X_train = np.concatenate(X_adapted, axis=0)
 
         if archi == "ShallowNet":
@@ -163,21 +175,19 @@ for filter_size in [2, 4, 8, 16, 32, 64, 128]:
         for subject_test in range(n_subjects):
             X_test = X_all_target[subject_test]
             y_test = y_all_target[subject_test]
-            time_length = X_test[0].shape[2]
+            time_length = X_test.shape[2]
             length_to_remove = (time_length - (fs * 3)) // 2
-            X_test = [
-                X_test[i][:, :, length_to_remove:length_to_remove + (fs * 3)]
-                for i in range(len(X_test))
-            ]
-            X_test_adapted = cmmn.transform(X_test)
+            X_test = X_test[:, :, length_to_remove:length_to_remove + (fs * 3)]
 
-            X_test_adapted = np.concatenate(X_test_adapted, axis=0)
-            y_pred = clf.predict(X_test_adapted)
-            y_true = np.concatenate(y_test, axis=0)
+            X_test_adapted = cmmn.transform([X_test])[0]
+
+            # X_test_adapted = np.concatenate(X_test_adapted, axis=0)
+            y_pred = clf.predict(np.array(X_test_adapted).astype(np.float32))
+            # y_true = np.concatenate(y_test, axis=0)
 
             # Save results
             results = [{
-                "acc": accuracy_score(y_true, y_pred),
+                "acc": accuracy_score(y_test, y_pred),
                 "archi": archi,
                 "method": method,
                 "subject_test": subject_test,
@@ -189,6 +199,7 @@ for filter_size in [2, 4, 8, 16, 32, 64, 128]:
                 "concatenate": args.concatenate,
                 "reg": reg,
                 "batch_size": batch_size,
+                "num_iter": args.num_iter,
             }]
             try:
                 df_results = pd.read_pickle(results_path)

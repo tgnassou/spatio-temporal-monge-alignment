@@ -94,8 +94,7 @@ def welch_method(image, window_size, overlap_ratio):
             patch = image[i:i + window_size, j:j + window_size]
 
             # Compute FFT of the segment and its squared magnitude
-            fft = np.fft.fft(patch.flatten(), axis=0)
-            psd = np.abs(fft) ** 2
+            psd = compute_psd(patch)
 
             # Store the periodogram of the segment
             psd_patches.append(psd)

@@ -1,6 +1,6 @@
 from pyriemann.utils.mean import mean_covariance
 from pyriemann.utils.covariance import covariances
-
+from sklearn.covariance import empirical_covariance, shrunk_covariance
 import numpy as np
 import scipy
 
@@ -38,13 +38,20 @@ class RiemanianAlignment(ABC):
             cov_mean = self._compute_mean_covariance(X)
         else:
             cov_mean = self.cov_mean
-        X_new = [
-            np.array([
-                np.matmul(cov_mean, X[i][j])
-                for j in range(len(X[i]))
-            ])
-            for i in range(len(X))
-        ]
+
+        if len(X[0].shape) == 3:
+            X_new = [
+                np.array([
+                    np.matmul(cov_mean, X[i][j])
+                    for j in range(len(X[i]))
+                ])
+                for i in range(len(X))
+            ]
+        else:
+            X_new = [
+                np.matmul(cov_mean, X[i])
+                for i in range(len(X))
+            ]
         return X_new
 
     def fit_transform(self, X):
@@ -82,7 +89,13 @@ class RiemanianAlignment(ABC):
                 for i in range(len(X))
             ])
         else:
-            cov = covariances(X, estimator="oas")
+            cov = np.array([
+                covariances(X[i][np.newaxis, :, :], estimator="oas")[0]
+                for i in range(len(X))
+            ])
+
+        eye = np.eye(cov.shape[1])*1e-7
+        cov = cov + eye
         cov_mean = mean_covariance(cov, metric="riemann")
         cov_mean = np.linalg.inv(scipy.linalg.sqrtm(cov_mean))
         return cov_mean

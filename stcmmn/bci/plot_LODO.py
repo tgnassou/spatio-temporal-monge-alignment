@@ -10,14 +10,15 @@ from statannotations.Annotator import Annotator
 from scipy.stats import wilcoxon
 
 # %% Plot Spatio-temp vs RA and raw
-fnames = list(Path("results/LODO").glob("*.pkl"))
+fnames = list(Path("results/LODO/").glob("*.pkl"))
 df = pd.concat([pd.read_pickle(fname) for fname in fnames], axis=0)
 df = df.query(
     "filter == True"
     "& n_epochs == 200"
     "& archi == 'ShallowNet'"
-    "& num_iter == 10"
 )
+df = pd.concat([df.query("method != 'spatiotemp'"), df.query("method == 'spatiotemp' & num_iter == 1")])
+
 # df = df.query("method != 'spatiotemp' | num_iter == 200")
 # %%
 pairs = [
@@ -33,7 +34,7 @@ dataset = [
 ]
 df_plot = df.groupby(
     ["subject_test", "dataset_target", "method"]
-).mean().reset_index()
+).acc.mean().reset_index()
 df_plot = df_plot.query("method in ['raw', 'riemannalignment', 'spatiotemp']")
 for i, ax in enumerate(axes.flatten()):
     if i == 5:
@@ -92,8 +93,8 @@ for i, ax in enumerate(axes.flatten()):
         edgecolor="dimgray",
         linewidth=0.1,
     )
-    acc = df_plot_.groupby("method").mean().reset_index().acc
-    std = df_plot_.groupby("method").std().reset_index().acc
+    acc = df_plot_.groupby("method").acc.mean().reset_index().acc
+    std = df_plot_.groupby("method").acc.std().reset_index().acc
     labels = [
         f"w/o Normalization \n ({acc[0]:.2f} $\pm$ {std[0]:.2f}) ", # noqa
         f"Riemann Alignment \n ({acc[1]:.2f} $\pm$ {std[1]:.2f})", # noqa
@@ -118,10 +119,11 @@ fig, axes = plt.subplots(
 cmap = sns.color_palette("colorblind", as_cmap=True)
 
 ax = axes[0]
+df_mean = df.groupby(["subject_test", "dataset_target", "method"]).acc.mean().reset_index() 
 df_plot = pd.concat(
     (
-        df.query("method == 'raw'")[["acc"]],
-        df.query("method == 'spatiotemp'").rename(columns={"acc": "acc_adapted"})),
+        df_mean.query("method == 'raw'")[["acc"]].reset_index(),
+        df_mean.query("method == 'spatiotemp'").rename(columns={"acc": "acc_adapted"}).reset_index()),
     axis=1
 )
 raw = df_plot.acc.values
@@ -129,32 +131,33 @@ spatiotemp = df_plot.acc_adapted.values
 # len of spatiotemp - raw positive
 n = np.sum(spatiotemp - raw > 0)
 pvalue = wilcoxon(spatiotemp, raw, alternative="two-sided").pvalue
-ax.set_title(f"p-value: {pvalue:.2f}")
+ax.set_title(f"p-value: {pvalue:.1}")
 df_plot = df_plot[["subject_test", "dataset_target", "acc_adapted", "acc"]]
 df_plot["delta"] = df_plot.acc_adapted - df_plot.acc
-
 fig.tight_layout(rect=[0, 0, .9, 1])
 sns.scatterplot(
     data=df_plot,
     x="acc",
     y="acc_adapted",
-    alpha=0.8,
+    alpha=0.6,
     linewidth=1,
     ax=ax,
+    s=25,
     legend=False,
     hue="dataset_target",
-    palette="colorblind"
+    palette="colorblind",
+    edgecolor="dimgray",
 )
 text(
-    0.11, 0.23, f"{np.int(np.round(n/len(raw)*100))}%",
+    0.17, 0.95, f"{np.round(n/len(raw)*100, 2)}%",
     horizontalalignment='center', verticalalignment='center',
     transform=ax.transAxes, size=9
 )
-text(
-    0.23, 0.07, f"{np.int(np.round((1 - n/len(raw))*100))}%",
-    horizontalalignment='center', verticalalignment='center',
-    transform=ax.transAxes,size=9
-)
+# text(
+#     0.23, 0.07, f"{int(np.round((1 - n/len(raw))*100))}%",
+#     horizontalalignment='center', verticalalignment='center',
+#     transform=ax.transAxes,size=9
+# )
 lims = [
     np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
     np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
@@ -170,17 +173,17 @@ ax.set_ylabel("Acc. with STMA")
 ax = axes[1]
 df_plot = pd.concat(
     (
-        df.query("method == 'riemannalignment'")[["acc"]],
-        df.query(
+        df_mean.query("method == 'riemannalignment'")[["acc"]].reset_index(),
+        df_mean.query(
             "method == 'spatiotemp'"
-        ).rename(columns={"acc": "acc_adapted"})
+        ).rename(columns={"acc": "acc_adapted"}).reset_index()
     ),
     axis=1
 )
 riemann = df_plot.acc.values
 pvalue = wilcoxon(spatiotemp, riemann, alternative="two-sided").pvalue
 n = np.sum(spatiotemp - riemann > 0)
-ax.set_title(f"p-value: {pvalue:.2f}")
+ax.set_title(f"p-value: {pvalue:.1}")
 
 df_plot = df_plot[["subject_test", "dataset_target", "acc_adapted", "acc"]]
 df_plot["delta"] = df_plot.acc_adapted - df_plot.acc
@@ -189,14 +192,16 @@ g = sns.scatterplot(
     data=df_plot,
     x="acc",
     y="acc_adapted",
-    alpha=0.8,
+    alpha=0.6,
     linewidth=1,
     ax=ax,
+    s=25,
     hue="dataset_target",
-    palette="colorblind"
+    palette="colorblind",
+    edgecolor="dimgray",
 )
-text(0.11, 0.23, f"{np.int(np.round(n/len(raw)*100))}%", horizontalalignment='center', verticalalignment='center', transform=ax.transAxes, size=9)
-text(0.23, 0.07, f"{np.int(np.round((1 - n/len(raw))*100))}%", horizontalalignment='center', verticalalignment='center', transform=ax.transAxes,size=9)
+text(0.17, 0.95, f"{np.round(n/len(raw)*100, 2)}%", horizontalalignment='center', verticalalignment='center', transform=ax.transAxes, size=9)
+# text(0.23, 0.07, f"{int(np.round((1 - n/len(raw))*100))}%", horizontalalignment='center', verticalalignment='center', transform=ax.transAxes,size=9)
 plt.legend(title="Dataset Target", loc="upper left", bbox_to_anchor=(1.1, 0.8), )
 ax.plot(lims, lims, "k-", alpha=0.75, zorder=0)
 ax.set_xlim(lims)

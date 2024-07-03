@@ -1,10 +1,13 @@
 import numpy as np
 
+from functools import partial
 from scipy.signal import welch, csd
 import scipy.fft as sp_fft
+import scipy
 from abc import ABC
 from joblib import Parallel, delayed
 
+from pyriemann.utils.covariance import covariances
 import ot
 
 
@@ -21,6 +24,7 @@ class CMMN(ABC):
         num_iter=1,
         concatenate_epochs=True,
         n_jobs=1,
+        circular=False,
     ):
         super().__init__()
         self.filter_size = filter_size
@@ -32,6 +36,11 @@ class CMMN(ABC):
         self.num_iter = num_iter
         self.concatenate_epochs = concatenate_epochs
         self.n_jobs = n_jobs
+        self.circular = circular
+        if self.circular:
+            self.convolve = partial(scipy.ndimage.convolve1d, mode="wrap")
+        else:
+            self.convolve = partial(scipy.signal.convolve, mode="same")
 
     def fit(self, X):
         """Fit the barycenter.
@@ -47,10 +56,10 @@ class CMMN(ABC):
             X = [np.concatenate(X[i], axis=-1) for i in range(len(X))]
 
         # Compute the power spectral density
-        psd = self.compute_psd(X)
+        self.psd = self.compute_psd(X)
 
         # Compute the barycenter of the psd
-        self.compute_barycenter(psd)
+        self.compute_barycenter(self.psd)
 
         return self
 
@@ -70,19 +79,19 @@ class CMMN(ABC):
             X = [np.concatenate(X[i], axis=-1) for i in range(K)]
 
         # Compute the power spectral density
-        psd = self.compute_psd(X)
+        self.psd = self.compute_psd(X)
 
         # Compute the filter and the convolution
-        H = self.compute_filter(psd)
+        self.H = self.compute_filter(self.psd)
         X = Parallel(n_jobs=self.n_jobs)(
-            delayed(self.compute_convolution)(X[i], H[i]) for i in range(K)
+            delayed(self.compute_convolution)(X[i], self.H[i]) for i in range(K)
         )
 
         if self.concatenate_epochs:
             # Reshape the data to (K, N, C, T)
             X = [self._epoching(X[i], window_size) for i in range(K)]
         if return_H:
-            return X, H
+            return X, self.H
         return X
 
     def fit_transform(self, X, return_H=False):
@@ -101,15 +110,15 @@ class CMMN(ABC):
             X = [np.concatenate(X[i], axis=-1) for i in range(K)]
 
         # Compute the power spectral density
-        psd = self.compute_psd(X)
+        self.psd = self.compute_psd(X)
 
         # Compute the barycenter of the psd
-        self.compute_barycenter(psd)
+        self.compute_barycenter(self.psd)
 
         # Compute the filter and the convolution
-        H = self.compute_filter(psd)
+        self.H = self.compute_filter(self.psd)
         X = Parallel(n_jobs=self.n_jobs)(
-            delayed(self.compute_convolution)(X[i], H[i]) for i in range(K)
+            delayed(self.compute_convolution)(X[i], self.H[i]) for i in range(K)
         )
 
         if self.concatenate_epochs:
@@ -117,7 +126,7 @@ class CMMN(ABC):
             X = [self._epoching(X[i], window_size) for i in range(K)]
 
         if return_H:
-            return X, H
+            return X, self.H
         return X
 
     def compute_barycenter(self, psd):
@@ -264,7 +273,7 @@ class CMMN(ABC):
 
     def _temporal_convolution(self, X, H):
         C = len(X)
-        X_norm = [np.convolve(X[chan], H[chan], mode="same") for chan in range(C)]
+        X_norm = [self.convolve(X[chan], H[chan]) for chan in range(C)]
         X_norm = np.array(X_norm)
         return X_norm
 
@@ -277,7 +286,7 @@ class CMMN(ABC):
         X_norm = np.array(
             [
                 np.sum(
-                    [np.convolve(X[j], H[i, j], mode="same") for j in range(C)],
+                    [self.convolve(X[j], H[i, j]) for j in range(C)],
                     axis=0,
                 )
                 for i in range(len(H))
@@ -346,14 +355,19 @@ class CMMN(ABC):
 
         elif self.method == "spatio":
             if self.concatenate_epochs:
-                psd = [np.cov(X[i]) for i in range(K)]
+                psd = [
+                    covariances(X[i][np.newaxis, :, :], estimator="oas")[0]
+                    for i in range(K)
+                ]
             else:
                 psd = []
                 for i in range(K):
                     # Compute the average covariance over the
                     # samples of the domain
                     N = len(X[i])
-                    psd.append(np.mean([np.cov(X[i][j]) for j in range(N)], axis=0))
+                    psd.append(
+                        np.mean(covariances(X[i], estimator="oas"), axis=0)
+                    )
 
         return np.array(psd)
 

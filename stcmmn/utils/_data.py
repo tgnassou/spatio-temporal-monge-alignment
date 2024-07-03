@@ -335,10 +335,13 @@ def load_BCI_dataset(
     X = []
     y = []
     for sub in subjects:
-        n_domains = len(splitted[sub].datasets)
-        X.append([
-            splitted[sub].datasets[i].windows.get_data().astype(np.float32)
-            for i in range(n_domains)
-        ])
-        y.append([splitted[sub].datasets[i].y for i in range(n_domains)])
+        n_runs = len(splitted[sub].datasets)
+        x = []
+        y_ = []
+        for run in range(n_runs):
+            x += [sample[0] for sample in splitted[sub].datasets[run]]
+            y_ += [sample[1] for sample in splitted[sub].datasets[run]]
+        X.append(np.array(x))
+        y.append(np.array(y_))
+
     return X, y

@@ -5,8 +5,8 @@ from braindecode.models import SleepStagerChambon2018
 from braindecode import EEGClassifier
 
 from sklearn.utils.class_weight import compute_class_weight
-from sklearn.utils import check_random_state
 from sklearn.model_selection import train_test_split
+from sklearn.utils import check_random_state
 
 from skorch.callbacks import EarlyStopping
 from skorch.helper import predefined_split
@@ -41,21 +41,23 @@ for dataset_name in dataset_names:
         scaler="sample",
     )
     data_dict[dataset_name] = [X_, y_, subject_ids_]
+    del X_, y_, subject_ids_
 
 # %%
 module_name = "chambon"
 max_epochs = 150
 batch_size = 128
 patience = 15
-filter_size = 2048
+filter_size = 256
 n_jobs = 30
+num_iter = 1
 # %%
-for method in ["raw", "temp", "spatio", "riemann", "spatiotemp"]:
-
+for method in ["spatiotemp"]:
     results_path = (
         f"results/LODO_final/results_LODO_{method}_{module_name}_"
         f"{len(dataset_names)}_dataset_with_{n_subject}_subjects.pkl"
     )
+
     for seed in range(10):
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
@@ -83,7 +85,8 @@ for method in ["raw", "temp", "spatio", "riemann", "spatiotemp"]:
                         subjects_train_,
                         subjects_val_,
                     ) = train_test_split(
-                        X_, y_, subject_ids_, test_size=valid_size
+                        X_, y_, subject_ids_,
+                        test_size=valid_size, random_state=rng
                     )
 
                     X_train += X_train_
@@ -108,16 +111,17 @@ for method in ["raw", "temp", "spatio", "riemann", "spatiotemp"]:
                     reg=1e-3,
                     concatenate_epochs=True,
                     n_jobs=n_jobs,
-                    num_iter=10
+                    num_iter=num_iter
                 )
                 X_train = cmmn.fit_transform(X_train)
                 X_val = cmmn.transform(X_val)
                 X_target = cmmn.transform(X_target)
+                del cmmn
             elif method == "riemann":
                 ra = RiemanianAlignment(non_homogeneous=False)
-                X_train = cmmn.fit_transform(X_train)
-                X_val = cmmn.transform(X_val)
-                X_target = cmmn.transform(X_target)
+                X_train = ra.fit_transform(X_train)
+                X_val = ra.transform(X_val)
+                X_target = ra.transform(X_target)
             elif method == "raw":
                 pass
             else:
@@ -129,6 +133,7 @@ for method in ["raw", "temp", "spatio", "riemann", "spatiotemp"]:
                 "balanced", classes=np.unique(np.concatenate(y_train)),
                 y=np.concatenate(y_train)
             )
+
             module = SleepStagerChambon2018(
                 n_chans=n_channels, n_outputs=n_classes, sfreq=100
             )
@@ -178,6 +183,7 @@ for method in ["raw", "temp", "spatio", "riemann", "spatiotemp"]:
                         "y_target": y_t,
                         "y_pred": y_pred,
                         "reg": 0,
+                        "num_iter": num_iter,
                     }
                 )
             try:
@@ -186,3 +192,5 @@ for method in ["raw", "temp", "spatio", "riemann", "spatiotemp"]:
                 df_results = pd.DataFrame()
             df_results = pd.concat((df_results, pd.DataFrame(results)))
             df_results.to_pickle(results_path)
+
+# %%
