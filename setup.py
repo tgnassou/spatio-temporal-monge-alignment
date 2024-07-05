@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='stcmmn',
+    name='monge_alignment',
     version='0.1',
     description='Convolutional Monge Mapping Normalization',
 
