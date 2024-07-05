@@ -6,7 +6,7 @@ from ._dataset_params import DATASET_PARAMS
 from ._best_params import BEST_PARAMS
 from ._functions import compute_final_conv_length
 from ._dataloader import DomainDataset, DomainBatchSampler
-from ._mtm import CNNmtm, load_a_dataset
+from ...old_expe.minitimematch._mtm import CNNmtm, load_a_dataset
 from ._blur_mnist import (
     create_2d_gaussian_filter,
     apply_convolution,

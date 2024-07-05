@@ -36,7 +36,3 @@ plt.show()
 # %%
 import seaborn as sns
 sns.scatterplot(data=df, x="dir", y="accuracy", hue="method")
-
-# %%
-help(sp.spiderplot)
-# %%

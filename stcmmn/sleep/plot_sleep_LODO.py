@@ -117,7 +117,7 @@ for i, ax in enumerate(axes.flatten()):
     ax.set_ylabel("")
 
     plt.tight_layout()
-    fig.savefig("results/plots/LODO.pdf", bbox_inches="tight")
+fig.savefig("results/plots/LODO.pdf", bbox_inches="tight")
     # plt.xlabel("BACC")
 # %%
 
@@ -327,7 +327,7 @@ for i, ax in enumerate(axes.flatten()):
     ax.set_ylabel("")
 
     plt.tight_layout()
-    fig.savefig("results/plots/LODO_ablation.pdf", bbox_inches="tight")
+fig.savefig("results/plots/LODO_ablation.pdf", bbox_inches="tight")
     # plt.xlabel("BACC")
 # %%
 df_tab = df_plot[['subject', 'dataset_t', 'method', 'bal']]

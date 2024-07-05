@@ -78,7 +78,7 @@ for dataset in dataset_names:
 # Define source and target domains
 dataset_target = args.dataset
 
-for method in ["spatiotemp"]:
+for method in ["raw", "riemann", "temp", "spatio", "spatiotemp"]:
     for dataset_target in dataset_names:
         # Define source and target domains
         X_source = []
