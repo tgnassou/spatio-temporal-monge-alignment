@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name='monge_alignment',
     version='0.1',
-    description='Convolutional Monge Mapping Normalization',
+    description='Spatio-Temporal Monge Alignment',
 
     # The project's main homepage.
     # url='https://github.com/tgnassou/da-toolbox',
