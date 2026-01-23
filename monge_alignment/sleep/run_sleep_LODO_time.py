@@ -129,12 +129,12 @@ for method in ["spatio", "spatiotemp", "temp", "riemann",]:
             else:
                 raise ValueError(f"Unknown method {method}")
             time_end = time.time()
-            results = {
+            results = [{
                     "method": method,
                     "seed": seed,
                     "dataset_t": dataset_target,
                     "time_alignment": time_end - time_init,
-                }
+                }]
             try:
                 df_results = pd.read_pickle(results_path)
             except FileNotFoundError:
