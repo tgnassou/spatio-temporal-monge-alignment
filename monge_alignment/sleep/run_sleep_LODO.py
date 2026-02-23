@@ -14,7 +14,7 @@ from skorch.dataset import Dataset
 
 from monge_alignment.utils import load_sleep_dataset
 from monge_alignment.utils import MongeAlignment, RiemanianAlignment
-from monge_alignment.utils import UNet
+from monge_alignment.utils import USleep
 
 import torch
 from torch import nn

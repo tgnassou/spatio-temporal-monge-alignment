@@ -12,7 +12,7 @@ from ._blur_mnist import (
     welch_method,
     compute_psd
 )
-from ._unet import UNet
+from ._unet import USleep
 
 __all__ = [
     "get_csd",
@@ -29,5 +29,5 @@ __all__ = [
     "apply_convolution",
     "welch_method",
     "compute_psd",
-    "UNet",
+    "USleep",
 ]
