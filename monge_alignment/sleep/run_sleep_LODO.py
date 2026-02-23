@@ -135,7 +135,7 @@ for method in ["spatio", "spatiotemp", "temp", "riemann",]:
                 y=np.concatenate(y_train)
             )
             if module_name == "unet":
-                module = UNet(
+                module = USleep(
                     n_chans=n_channels, n_outputs=n_classes, sfreq=100
                 )
             elif module_name == "chambon":
