@@ -14,6 +14,7 @@ from skorch.dataset import Dataset
 
 from monge_alignment.utils import load_sleep_dataset
 from monge_alignment.utils import MongeAlignment, RiemanianAlignment
+from monge_alignment.utils.unet import UNet
 
 import torch
 from torch import nn
@@ -33,7 +34,7 @@ dataset_names = [
 
 data_dict = {}
 # %%
-n_subject = 100
+n_subject = 5
 for dataset_name in dataset_names:
     X_, y_, subject_ids_ = load_sleep_dataset(
         n_subjects=n_subject,
@@ -44,7 +45,7 @@ for dataset_name in dataset_names:
     del X_, y_, subject_ids_
 
 # %%
-module_name = "chambon"
+module_name = "unet"
 max_epochs = 150
 batch_size = 128
 patience = 15
@@ -52,7 +53,7 @@ filter_size = 256
 n_jobs = 30
 num_iter = 1
 # %%
-for method in ["spatiotemp"]:
+for method in ["spatio", "spatiotemp", "temp", "riemann",]:
     results_path = (
         f"results/LODO_final/results_LODO_{method}_{module_name}_"
         f"{len(dataset_names)}_dataset_with_{n_subject}_subjects.pkl"
@@ -133,10 +134,15 @@ for method in ["spatiotemp"]:
                 "balanced", classes=np.unique(np.concatenate(y_train)),
                 y=np.concatenate(y_train)
             )
+            if module_name == "unet":
+                module = UNet(
+                    n_chans=n_channels, n_outputs=n_classes, sfreq=100
+                )
+            elif module_name == "chambon":
+                module = SleepStagerChambon2018(
+                    n_chans=n_channels, n_outputs=n_classes, sfreq=100
+                )
 
-            module = SleepStagerChambon2018(
-                n_chans=n_channels, n_outputs=n_classes, sfreq=100
-            )
             clf = EEGClassifier(
                 module=module,
                 max_epochs=max_epochs,
