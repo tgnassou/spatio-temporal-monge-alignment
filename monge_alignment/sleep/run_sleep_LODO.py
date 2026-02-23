@@ -136,7 +136,7 @@ for method in ["spatio", "spatiotemp", "temp", "riemann",]:
             )
             if module_name == "unet":
                 module = USleep(
-                    n_chans=n_channels, n_outputs=n_classes, sfreq=100
+                    n_chans=n_channels, n_outputs=n_classes, sfreq=100, input_window_seconds=30
                 )
             elif module_name == "chambon":
                 module = SleepStagerChambon2018(
