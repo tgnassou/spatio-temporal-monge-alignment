@@ -14,7 +14,7 @@ from skorch.dataset import Dataset
 
 from monge_alignment.utils import load_sleep_dataset
 from monge_alignment.utils import MongeAlignment, RiemanianAlignment
-from monge_alignment.utils.unet import UNet
+from monge_alignment.utils import UNet
 
 import torch
 from torch import nn
@@ -55,7 +55,7 @@ num_iter = 1
 # %%
 for method in ["spatio", "spatiotemp", "temp", "riemann",]:
     results_path = (
-        f"results/LODO_final/results_LODO_{method}_{module_name}_"
+        f"results/LODO_unet/results_LODO_{method}_{module_name}_"
         f"{len(dataset_names)}_dataset_with_{n_subject}_subjects.pkl"
     )
 
