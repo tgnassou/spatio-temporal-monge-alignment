@@ -34,7 +34,7 @@ dataset_names = [
 
 data_dict = {}
 # %%
-n_subject = 5
+n_subject = 100
 for dataset_name in dataset_names:
     X_, y_, subject_ids_ = load_sleep_dataset(
         n_subjects=n_subject,
@@ -53,7 +53,7 @@ filter_size = 256
 n_jobs = 30
 num_iter = 1
 # %%
-for method in ["spatio", "spatiotemp", "temp", "riemann",]:
+for method in ["raw","spatio", "spatiotemp", "temp", "riemann",]:
     results_path = (
         f"results/LODO_unet/results_LODO_{method}_{module_name}_"
         f"{len(dataset_names)}_dataset_with_{n_subject}_subjects.pkl"
